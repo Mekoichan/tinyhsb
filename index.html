@@ -1,0 +1,2741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>爱狗小游戏</title>
+    
+    <style>
+        :root {
+            --c-bg: #1a1c2c;
+            --c-panel: #29366f;
+            --c-panel-dark: #1a2c5e;
+            --c-border: #000000;
+            --c-text: #f4f4f4;
+            --c-text-dim: #94b0c2;
+            --c-damage: #b13e53;
+            --c-gentle: #a7f070;
+            --c-heal: #41a6f6;
+            --c-gold: #ffcd75;
+            --c-cyan: #41a6f6;
+            --c-purple: #9d4edd;
+            --c-orange: #ef7d57;
+            --c-pink: #ffb7c5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            cursor: none;
+            font-family: 'DotGothic16', 'Microsoft YaHei', monospace;
+            background: var(--c-bg);
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: var(--c-bg);
+            transition: background 2s ease;
+        }
+        #game-container.pink-bg {
+            background: linear-gradient(180deg, #ffd6e0 0%, #ffb7c5 50%, #ff9eb1 100%) !important;
+        }
+
+        /* ===== Pixel Grid ===== */
+        #pixel-grid {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 4px 4px;
+            z-index: 1;
+        }
+
+        /* ===== Vignette ===== */
+        #vignette {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+            z-index: 2;
+        }
+
+        /* ===== Scanlines ===== */
+        #scanlines {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px);
+            z-index: 201;
+        }
+
+        /* ===== HUD ===== */
+        #hud {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            z-index: 30;
+            pointer-events: none;
+        }
+        .hud-box {
+            background: var(--c-panel-dark);
+            border: 3px solid var(--c-border);
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+            padding: 6px 10px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            color: var(--c-text);
+            letter-spacing: 1px;
+        }
+        .hud-box .hud-label { color: var(--c-text-dim); font-size: 8px; margin-bottom: 4px; }
+        .hud-box .hud-value { color: var(--c-gold); font-size: 12px; }
+        @media (max-width: 600px) {
+            .hud-box { padding: 4px 8px; font-size: 8px; }
+            .hud-box .hud-label { font-size: 6px; }
+            .hud-box .hud-value { font-size: 10px; }
+        }
+
+        /* ===== Character Zone ===== */
+        #character-zone {
+            position: relative;
+            width: 280px;
+            height: 380px;
+            margin-top: 40px;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        @media (max-width: 600px) { #character-zone { width: 220px; height: 300px; margin-top: 60px; } }
+        @media (max-width: 400px) { #character-zone { width: 170px; height: 240px; margin-top: 70px; } }
+        #character-zone .char-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #char-body { z-index: 3; }
+        #char-expression { z-index: 2; }
+        #char-suffocation { z-index: 4; opacity: 0; transition: opacity 0.15s ease; }
+        #char-suffocation.active { opacity: 0.55; }
+        #char-neck-red { z-index: 4; }
+        #char-bandage { z-index: 5; }
+        #char-flower { z-index: 6; }
+        #char-flowers { z-index: 6; }
+        #char-blanket { z-index: 5; }
+        #char-tea { z-index: 6; }
+
+        /* ===== Dialog Box ===== */
+        #dialog-box {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 85%;
+            max-width: 550px;
+            min-height: 60px;
+            background: var(--c-panel);
+            border: 4px solid var(--c-border);
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+            padding: 14px 28px 14px 18px;
+            z-index: 50;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        #dialog-box.visible { opacity: 1; }
+        #dialog-box .dialog-name {
+            font-family: 'Press Start 2P', monospace;
+            font-weight: bold;
+            font-size: 11px;
+            color: var(--c-gold);
+            white-space: nowrap;
+            flex-shrink: 0;
+            border-right: 2px solid var(--c-text-dim);
+            padding-right: 10px;
+            letter-spacing: 1px;
+            line-height: 1.6;
+        }
+        #dialog-box .dialog-text {
+            font-family: 'DotGothic16', monospace;
+            font-size: 15px;
+            color: var(--c-text);
+            line-height: 1.5;
+            letter-spacing: 0.5px;
+            word-break: break-all;
+            flex: 1;
+        }
+        #click-indicator {
+            position: absolute;
+            bottom: 6px;
+            right: 10px;
+            color: var(--c-gold);
+            font-size: 14px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #click-indicator.visible {
+            opacity: 1;
+            animation: blink 0.8s steps(2) infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.2; }
+        }
+        @media (max-width: 600px) {
+            #dialog-box { top: 55px; width: 92%; padding: 10px 24px 10px 12px; border-width: 3px; }
+            #dialog-box .dialog-name { font-size: 9px; padding-right: 6px; }
+            #dialog-box .dialog-text { font-size: 13px; }
+        }
+        @media (max-width: 400px) {
+            #dialog-box { top: 45px; padding: 8px 20px 8px 10px; }
+            #dialog-box .dialog-name { font-size: 8px; }
+            #dialog-box .dialog-text { font-size: 11px; }
+        }
+
+        /* ===== Interaction Dots ===== */
+        #interaction-dots {
+            position: absolute;
+            bottom: 115px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 35;
+        }
+        @media (max-width: 600px) { #interaction-dots { bottom: 85px; gap: 6px; } }
+        .dot {
+            width: 12px; height: 12px;
+            border: 2px solid var(--c-border);
+            background: var(--c-panel-dark);
+            transition: background 0.2s ease;
+        }
+        .dot.filled.damage { background: var(--c-damage); }
+        .dot.filled.gentle { background: var(--c-gentle); }
+        .dot.filled.heal { background: var(--c-heal); }
+        .dot.filled { background: var(--c-gold); }
+        @media (max-width: 600px) { .dot { width: 10px; height: 10px; } }
+
+        /* ===== Item Bar ===== */
+        #item-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            z-index: 40;
+            background: var(--c-panel-dark);
+            border: 4px solid var(--c-border);
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+            padding: 12px 16px;
+            transition: opacity 0.4s ease;
+            max-width: 95%;
+        }
+        #item-bar.disabled { opacity: 0.3; pointer-events: none; }
+        .item-slot {
+            width: 90px; height: 90px;
+            background: var(--c-bg);
+            border: 3px solid var(--c-text-dim);
+            cursor: none;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.1s ease, border-color 0.15s ease;
+            position: relative;
+        }
+        .item-slot[data-item="whip"], .item-slot[data-item="blade"],
+        .item-slot[data-item="needle"], .item-slot[data-item="candle"] {
+            border-color: var(--c-damage);
+        }
+        .item-slot[data-item="flower"], .item-slot[data-item="tea"],
+        .item-slot[data-item="blanket"], .item-slot[data-item="handkerchief"] {
+            border-color: var(--c-gentle);
+        }
+        .item-slot[data-item="bandage"] { border-color: var(--c-heal); }
+        .item-slot:hover {
+            border-color: var(--c-gold);
+            transform: scale(1.08);
+            box-shadow: 0 0 0 2px var(--c-gold);
+        }
+        .item-slot:active { transform: scale(0.94); }
+        .item-slot img {
+            width: 72px; height: 72px;
+            transform:scale(2);
+            object-fit: contain;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            pointer-events: none;
+        }
+        @media (max-width: 600px) {
+            #item-bar { gap: 6px; padding: 8px 12px; bottom: 12px; }
+            .item-slot { width: 72px; height: 72px; border-width: 2px; }
+            .item-slot img { width: 60px; height: 60px; }
+        }
+        @media (max-width: 400px) {
+            #item-bar { gap: 4px; padding: 6px 8px; }
+            .item-slot { width: 48px; height: 48px; }
+            .item-slot img { width: 40px; height: 40px; }
+        }
+
+        /* ===== Ending Overlay ===== */
+        #ending-overlay {
+            position: absolute; inset: 0;
+            background: rgba(10,10,20,0.92);
+            z-index: 100;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            pointer-events: none; opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+        #ending-overlay.active { opacity: 1; pointer-events: all; }
+        #ending-text-area {
+            background: var(--c-panel-dark);
+            border: 4px solid var(--c-border);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.5);
+            padding: 28px 36px;
+            max-width: 80%; text-align: center;
+            margin-bottom: 30px; position: relative;
+        }
+        #ending-tag {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px; letter-spacing: 2px;
+            margin-bottom: 14px;
+            padding: 4px 10px; display: inline-block;
+            border: 2px solid var(--c-border);
+        }
+        #ending-tag.normal { background: var(--c-text-dim); color: var(--c-bg); }
+        #ending-tag.special { background: var(--c-gold); color: var(--c-bg); }
+        #ending-tag.meta { background: var(--c-cyan); color: var(--c-bg); }
+        #ending-tag.meta-final { background: var(--c-purple); color: var(--c-text); }
+        #ending-tag.true { background: var(--c-pink); color: var(--c-bg); }
+        #ending-title {
+            font-family: 'DotGothic16', monospace;
+            font-size: 32px; color: var(--c-gold);
+            letter-spacing: 6px; margin-bottom: 18px;
+            text-shadow: 3px 3px 0 var(--c-border);
+        }
+        #ending-description {
+            font-family: 'DotGothic16', monospace;
+            font-size: 16px; color: var(--c-text);
+            line-height: 1.7; white-space: pre-wrap;
+        }
+        @media (max-width: 600px) {
+            #ending-text-area { padding: 18px 24px; max-width: 90%; }
+            #ending-title { font-size: 24px; letter-spacing: 4px; }
+            #ending-description { font-size: 13px; }
+            #ending-tag { font-size: 7px; }
+        }
+        #ending-buttons {
+            display: flex; gap: 24px; flex-wrap: wrap; justify-content: center;
+        }
+        .ending-btn {
+            padding: 12px 28px;
+            font-family: 'DotGothic16', monospace;
+            font-size: 16px; letter-spacing: 3px;
+            border: 4px solid var(--c-border);
+            background: var(--c-panel); color: var(--c-text);
+            cursor: none;
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+            transition: transform 0.1s ease, background 0.15s ease;
+            pointer-events: all;
+        }
+        .ending-btn:hover {
+            background: var(--c-panel-dark);
+            border-color: var(--c-gold);
+            transform: translate(-2px,-2px);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.5);
+        }
+        .ending-btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+        .ending-btn.grayed { background: #333; color: #666; pointer-events: none; border-color: #555; box-shadow: none; opacity: 0.5; }
+        @media (max-width: 600px) { .ending-btn { padding: 10px 20px; font-size: 14px; border-width: 3px; } }
+
+        /* ===== Custom Cursor (hand) ===== */
+        #custom-cursor {
+            position: fixed; pointer-events: none; z-index: 9999;
+            width: 44px; height: 44px;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            transform: translate(-8px,-8px);
+            transition: none; will-change: left, top;
+        }
+        @media (max-width: 600px) { #custom-cursor { width: 36px; height: 36px; transform: translate(-6px,-6px); } }
+
+        /* ===== Drag Ghost ===== */
+        #drag-ghost {
+            position: fixed; pointer-events: none; z-index: 9998;
+            width: 50px; height: 50px; object-fit: contain;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            opacity: 0.85; display: none;
+            transform: translate(-50%,-50%); will-change: left, top;
+        }
+        @media (max-width: 600px) { #drag-ghost { width: 40px; height: 40px; } }
+
+        /* ===== Animations ===== */
+        @keyframes damageShake {
+            0% { transform: translate(0,0); }
+            25% { transform: translate(-3px,1px); }
+            50% { transform: translate(3px,-1px); }
+            75% { transform: translate(-1px,2px); }
+            100% { transform: translate(0,0); }
+        }
+        #character-zone.damage-effect {
+            animation: damageShake 0.2s ease-in-out 0s 2;
+            filter: brightness(1.2) sepia(0.8) hue-rotate(-20deg);
+        }
+        @keyframes flashWhite {
+            0% { background-color: rgba(255,255,240,0); }
+            40% { background-color: rgba(255,255,200,0.5); }
+            100% { background-color: rgba(255,255,240,0); }
+        }
+        @keyframes shakeScreen {
+            0% { transform: translate(0,0); }
+            25% { transform: translate(-4px,2px); }
+            50% { transform: translate(4px,-2px); }
+            75% { transform: translate(-2px,1px); }
+            100% { transform: translate(0,0); }
+        }
+        .screen-flash { animation: flashWhite 0.3s ease-out; }
+        .screen-shake { animation: shakeScreen 0.2s cubic-bezier(0.36,0.07,0.19,0.97) both; }
+        #game-container { transition: filter 0.1s, background 2s ease; }
+        .red-tint { filter: sepia(1) hue-rotate(-30deg) brightness(0.9); transition: filter 0.2s; }
+
+        /* ===== Collection Panel ===== */
+        #collection-panel {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%,-50%);
+            background: var(--c-panel-dark);
+            border: 4px solid var(--c-border);
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.5);
+            padding: 20px 28px; z-index: 90;
+            max-width: 85%; max-height: 70%; overflow-y: auto;
+            display: none;
+        }
+        #collection-panel.visible { display: block; }
+        #collection-panel h3 {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px; color: var(--c-gold);
+            margin-bottom: 14px; text-align: center; letter-spacing: 2px;
+        }
+        #collection-panel .ending-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+        #collection-panel .ending-item {
+            font-family: 'DotGothic16', monospace;
+            font-size: 13px; padding: 4px 10px;
+            border: 2px solid var(--c-border);
+            background: var(--c-bg); color: var(--c-text-dim);
+        }
+        #collection-panel .ending-item.unlocked { color: var(--c-gold); border-color: var(--c-gold); }
+        #collection-panel .ending-item.unlocked.special { border-color: var(--c-gold); color: var(--c-gold); }
+        #collection-panel .ending-item.unlocked.normal { border-color: var(--c-text-dim); color: var(--c-text); }
+        #collection-panel .ending-item.unlocked.meta { border-color: var(--c-cyan); color: var(--c-cyan); }
+        #collection-panel .ending-item.unlocked.true { border-color: var(--c-pink); color: var(--c-pink); }
+        #collection-close {
+            display: block; margin: 14px auto 0;
+            padding: 6px 16px;
+            font-family: 'DotGothic16', monospace;
+            font-size: 14px; border: 3px solid var(--c-border);
+            background: var(--c-panel); color: var(--c-text);
+            cursor: none; box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+        }
+
+        /* ===== Choice Area ===== */
+        #choice-area {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 20px;
+            z-index: 60;
+        }
+        #choice-area.visible { display: flex; }
+        .choice-btn {
+            padding: 10px 24px;
+            font-family: 'DotGothic16', monospace;
+            font-size: 15px; letter-spacing: 2px;
+            border: 3px solid var(--c-border);
+            background: var(--c-panel); color: var(--c-text);
+            cursor: none;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+            transition: transform 0.1s ease;
+        }
+        .choice-btn:hover {
+            border-color: var(--c-pink);
+            transform: translate(-2px,-2px);
+            box-shadow: 5px 5px 0 rgba(0,0,0,0.5);
+        }
+
+        /* ===== Cherry Blossom ===== */
+        #cherry-blossom-container {
+            position: absolute; inset: 0;
+            z-index: 150; pointer-events: none;
+            display: none; overflow: hidden;
+        }
+        #cherry-blossom-container.active { display: block; }
+        .petal {
+            position: absolute; top: -20px;
+            background: #ffb7c5;
+            border-radius: 50% 0 50% 0;
+            animation: petalFall linear infinite;
+        }
+        @keyframes petalFall {
+            0% { transform: translateY(0) translateX(0) rotate(0deg); }
+            100% { transform: translateY(110vh) translateX(30px) rotate(360deg); }
+        }
+
+        /* ===== Fade to Black ===== */
+        #fade-to-black {
+            position: absolute; inset: 0;
+            background: black; opacity: 0;
+            z-index: 300; pointer-events: none;
+            transition: opacity 4s ease;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #fade-to-black.active { opacity: 1; pointer-events: all; }
+        #true-ending-restart {
+            padding: 12px 28px;
+            font-family: 'DotGothic16', monospace;
+            font-size: 16px; letter-spacing: 3px;
+            border: 3px solid var(--c-text);
+            background: transparent; color: var(--c-text);
+            cursor: none; opacity: 0; pointer-events: none;
+            transition: opacity 1s ease;
+        }
+        #true-ending-restart.visible { opacity: 1; pointer-events: all; }
+        /* ===== Start Modal ===== */
+#start-modal {
+    position: absolute; inset: 0;
+    background: rgba(10, 10, 20, 0.92);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DotGothic16', 'Microsoft YaHei', monospace;
+}
+.modal-panel {
+    background: var(--c-panel-dark);
+    border: 6px solid var(--c-border);
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.6);
+    padding: 28px 36px;
+    max-width: 90%;
+    width: 580px;
+    max-height: 85vh;
+    overflow-y: auto;
+    text-align: center;
+}
+.modal-panel h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 28px;
+    color: var(--c-gold);
+    text-shadow: 4px 4px 0 var(--c-border);
+    letter-spacing: 4px;
+    margin-bottom: 18px;
+    border-bottom: 3px solid var(--c-text-dim);
+    padding-bottom: 12px;
+}
+.modal-body {
+    color: var(--c-text);
+    font-size: 14px;
+    line-height: 1.8;
+    text-align: left;
+    margin: 14px 0 22px 0;
+}
+.modal-body p {
+    margin-bottom: 14px;
+}
+.modal-label {
+    display: inline-block;
+    background: var(--c-bg);
+    color: var(--c-gold);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 2px solid var(--c-border);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+.modal-body strong {
+    color: var(--c-damage);
+}
+.modal-author {
+    color: var(--c-cyan);
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+.modal-btn {
+    padding: 12px 32px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    letter-spacing: 3px;
+    border: 4px solid var(--c-border);
+    background: var(--c-panel);
+    color: var(--c-text);
+    cursor: none;
+    box-shadow: 5px 5px 0 rgba(0,0,0,0.5);
+    transition: transform 0.1s ease, background 0.15s ease;
+    margin-top: 6px;
+}
+.modal-btn:hover {
+    background: var(--c-panel-dark);
+    border-color: var(--c-gold);
+    transform: translate(-2px, -2px);
+    box-shadow: 7px 7px 0 rgba(0,0,0,0.5);
+}
+.modal-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+}
+@media (max-width: 600px) {
+    .modal-panel { padding: 20px 18px; width: 95%; }
+    .modal-panel h1 { font-size: 20px; }
+    .modal-body { font-size: 12px; }
+    .modal-label { font-size: 9px; }
+    .modal-btn { font-size: 13px; padding: 10px 20px; }
+}
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="pixel-grid"></div>
+        <div id="vignette"></div>
+
+        <div id="hud">
+            <div class="hud-box">
+                <div class="hud-label">ROUND</div>
+                <div class="hud-value" id="round-display">01</div>
+            </div>
+            <div class="hud-box" id="collection-toggle" style="pointer-events:all; cursor:none;">
+                <div class="hud-label">ENDINGS</div>
+                <div class="hud-value" id="ending-display">0/18</div>
+            </div>
+        </div>
+
+        <div id="character-zone">
+            <img id="char-body" class="char-layer" src="hsb_body_0.png" alt="body">
+            <img id="char-expression" class="char-layer" src="hsb_base_calm.png" alt="expression" style="display:none;">
+            <img id="char-suffocation" class="char-layer" src="hsb_neck.png" alt="suffocation" style="display:none;">
+            <img id="char-neck-red" class="char-layer" src="hsb_neck_red.png" alt="neck-red" style="display:none;">
+            <img id="char-bandage" class="char-layer" src="hsb_bandage.png" alt="bandage" style="display:none;">
+            <img id="char-flower" class="char-layer" src="hsb_flower.png" alt="flower" style="display:none;">
+            <img id="char-flowers" class="char-layer" src="hsb_flowers.png" alt="flowers" style="display:none;">
+            <img id="char-blanket" class="char-layer" src="hsb_blanket.png" alt="blanket" style="display:none;">
+            <img id="char-tea" class="char-layer" src="hsb_tea.png" alt="tea" style="display:none;">
+        </div>
+
+        <div id="dialog-box">
+            <span class="dialog-name">长谷部</span>
+            <span class="dialog-text"></span>
+            <span id="click-indicator">▼</span>
+        </div>
+
+        <div id="interaction-dots">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        </div>
+
+        <div id="item-bar">
+            <div class="item-slot" data-item="whip"><img src="item_whip.png" alt="鞭子"></div>
+            <div class="item-slot" data-item="blade"><img src="item_blade.png" alt="刀片"></div>
+            <div class="item-slot" data-item="needle"><img src="item_needle.png" alt="针"></div>
+            <div class="item-slot" data-item="candle"><img src="item_candle.png" alt="蜡烛"></div>
+            <div class="item-slot" data-item="bandage"><img src="item_bandage.png" alt="绷带"></div>
+            <div class="item-slot" data-item="handkerchief"><img src="item_handkerchief.png" alt="手帕"></div>
+            <div class="item-slot" data-item="tea"><img src="item_tea.png" alt="热茶"></div>
+            <div class="item-slot" data-item="flower"><img src="item_flower.png" alt="小花"></div>
+            <div class="item-slot" data-item="blanket"><img src="item_blanket.png" alt="毛毯"></div>
+        </div>
+
+        <div id="ending-overlay">
+            <div id="ending-text-area">
+                <div id="ending-tag"></div>
+                <h2 id="ending-title"></h2>
+                <p id="ending-description"></p>
+            </div>
+            <div id="ending-buttons">
+                <button class="ending-btn" id="btn-stay">留 下</button>
+                <button class="ending-btn" id="btn-restart">重 来</button>
+            </div>
+        </div>
+
+        <div id="collection-panel">
+            <h3>结局收集</h3>
+            <div class="ending-list" id="ending-list"></div>
+            <button id="collection-close">关 闭</button>
+        </div>
+
+        <div id="choice-area"></div>
+        <div id="cherry-blossom-container"></div>
+        <div id="scanlines"></div>
+
+        <div id="fade-to-black">
+            <button id="true-ending-restart">重新开始</button>
+        </div>
+        <!-- ===== 开始弹窗 ===== -->
+<div id="start-modal">
+    <div class="modal-panel">
+        <h1>玩弄一只长谷部</h1>
+        <div class="modal-body">
+            <p><span class="modal-label">◆ 玩法简介</span><br>
+            选择或拖拽道具与角色互动，每次互动会推进进度条，<br>
+            满 5 次后进入结局。试着用不同的组合探索隐藏故事吧。</p>
+            
+            <p><span class="modal-label">◆ 内容预警</span><br>
+            本游戏包含 <strong>暴力、自残、支配与服从</strong> 等敏感意象，<br>
+            可能引起不适，请酌情游玩。</p>
+            
+            
+            <p>
+             <strong>欢迎repo：xhs紫薯小狗爱好者</strong>
+            <strong>🈲无授权转载/恶意讨论</strong></p>
+        </div>
+        <button id="modal-start-btn" class="modal-btn">开 始 游 戏</button>
+    </div>
+</div>
+    </div>
+
+    <img id="custom-cursor" src="item_hand_open.png" alt="cursor">
+    <img id="drag-ghost" src="" alt="ghost" style="display:none;">
+
+    <script>
+    (function() {
+        // ============================================================
+        //  结局定义
+        // ============================================================
+        var ALL_ENDINGS = [
+            { name: '安静的日子', type: 'normal' },
+            { name: '未曾说出口', type: 'normal' },
+            { name: '逐渐习惯', type: 'normal' },
+            { name: '春日留下的花', type: 'special' },
+            { name: '请再留下片刻', type: 'special' },
+            { name: '反复的温度', type: 'special' },
+            { name: '无法理解的心意', type: 'special' },
+            { name: '不再需要命令', type: 'special' },
+            { name: '燃尽之后', type: 'special' },
+            { name: '留下的痕迹', type: 'special' },
+            { name: '依旧服从', type: 'special' },
+            { name: '错误的奖励', type: 'special' },
+            { name: '被留下的证明', type: 'special' },
+            { name: '多余的温柔', type: 'special' },
+            { name: '只是触碰', type: 'special' },
+            { name: '终于开口', type: 'meta' },
+            { name: '凝视', type: 'meta' },
+            { name: '樱花之下', type: 'true' }
+        ];
+        window.ALL_ENDINGS = ALL_ENDINGS;
+
+        // ============================================================
+        //  游戏状态
+        // ============================================================
+        var state = {
+            // 当前轮
+            playerHistory: [],
+            roundInteractions: 0,
+            lastItem: null,
+            consecutiveSame: 0,
+            chokeSuccessCount: 0,
+            damageHistory: {},
+            healAfterDamage: 0,
+            damageSwitchFeedbackShown: false,
+            // 跨轮累计
+            endingHistory: [],
+            totalRounds: 1,
+            cumulativeItems: {},
+            cumulativeDamage: {},
+            cumulativeFlowers: 0,
+            cumulativeHealAfterDamage: 0,
+            cumulativeChoke: 0,
+            cumulativeDamageTypes: {},
+            prevRoundDamage: 0,
+            prevRoundGentle: 0,
+            // 视觉
+            woundTier: 0,
+            currentExpression: 'calm',
+            // 状态标记
+            isEnding: false,
+            isStayed: false,
+            // 对话系统
+            isDialogShowing: false,
+            dialogQueue: [],
+            currentDialog: null,
+            isTyping: false,
+            skipTyping: false,
+            lastInteractionTime: 0,
+            // 真结局
+            trueEndingAvailable: false,
+            trueEndingTriggered: false,
+            trueEndingPromptShowing: false,
+            trueEndingMode: false,
+            trueEndingWaiting: false,
+            trueEndingSeq: [],
+            trueEndingIndex: 0,
+            trueEndingBranchQueue: [],
+            trueEndingCurrentItem: null,
+            metaEndingActive:false,
+            
+            // 光标
+            cursorLock: false,
+            lastMouseX: 0,
+            lastMouseY: 0
+            
+        };
+        window.state = state;
+// ============================================================
+//  音效引擎（纯合成，无需外部文件）
+// ============================================================
+var SoundFX = {
+    ctx: null,
+    init: function() {
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        // 如果浏览器挂起（移动端策略），恢复它
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    },
+    // 播放主音调
+    playTone: function(freq, duration, type, volume, options) {
+        this.init();
+        var ctx = this.ctx;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = type || 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(volume || 0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (duration || 0.2));
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + (duration || 0.2) + 0.05);
+
+        // 选项：颤音
+        if (options && options.vibrato) {
+            var vibrato = ctx.createOscillator();
+            var vGain = ctx.createGain();
+            vibrato.frequency.setValueAtTime(options.vibratoSpeed || 8, ctx.currentTime);
+            vGain.gain.setValueAtTime(options.vibratoDepth || 10, ctx.currentTime);
+            vibrato.connect(vGain);
+            vGain.connect(osc.frequency);
+            vibrato.start(ctx.currentTime);
+            vibrato.stop(ctx.currentTime + (duration || 0.2) + 0.05);
+        }
+    },
+    // 噪声爆发（鞭子/刀片/摩擦）
+    playNoise: function(duration, volume, filterFreq) {
+        this.init();
+        var ctx = this.ctx;
+        var bufferSize = ctx.sampleRate * (duration || 0.15);
+        var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+        var noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        var gain = ctx.createGain();
+        gain.gain.setValueAtTime(volume || 0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (duration || 0.15));
+        var filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = filterFreq || 800;
+        filter.Q.value = 0.8;
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start(ctx.currentTime);
+        noise.stop(ctx.currentTime + (duration || 0.15) + 0.05);
+    },
+    // 主入口：根据道具类型触发
+    play: function(type) {
+        var self = this;
+        // 防止在静默或未初始化时调用
+        try {
+            switch(type) {
+                // ---- 温柔系 ----
+                case 'touch':
+                    self.playTone(320, 0.25, 'sine', 0.10, { vibrato: true, vibratoDepth: 4 });
+                    setTimeout(function() { self.playTone(440, 0.2, 'sine', 0.07); }, 100);
+                    break;
+                case 'flower':
+                    self.playTone(880, 0.3, 'sine', 0.08);
+                    setTimeout(function() { self.playTone(1100, 0.25, 'sine', 0.06); }, 120);
+                    break;
+                case 'tea':
+                    self.playTone(500, 0.2, 'sine', 0.06);
+                    setTimeout(function() { self.playTone(700, 0.15, 'sine', 0.05); }, 80);
+                    break;
+                case 'blanket':
+                    self.playTone(200, 0.4, 'sine', 0.12);
+                    setTimeout(function() { self.playTone(250, 0.5, 'sine', 0.08); }, 150);
+                    break;
+                case 'handkerchief':
+                    self.playTone(600, 0.15, 'sine', 0.07);
+                    self.playTone(900, 0.1, 'sine', 0.05);
+                    break;
+                case 'bandage':
+                    self.playNoise(0.2, 0.06, 1200);
+                    self.playTone(400, 0.15, 'sine', 0.05);
+                    break;
+
+                // ---- 伤害系 ----
+                case 'whip':
+                    self.playNoise(0.12, 0.18, 1500);
+                    self.playTone(120, 0.1, 'square', 0.04);
+                    break;
+                case 'blade':
+                    self.playNoise(0.08, 0.15, 2000);
+                    self.playTone(2000, 0.05, 'square', 0.03);
+                    break;
+                case 'needle':
+                    self.playTone(1600, 0.04, 'square', 0.06);
+                    self.playNoise(0.04, 0.10, 3000);
+                    break;
+                case 'candle':
+                    self.playNoise(0.3, 0.10, 300);
+                    self.playTone(100, 0.5, 'sawtooth', 0.04);
+                    break;
+                case 'choke':
+                    self.playTone(80, 0.6, 'sawtooth', 0.10);
+                    self.playNoise(0.4, 0.08, 150);
+                    break;
+
+                // ---- UI ----
+                case 'click':
+                    self.playTone(800, 0.03, 'square', 0.03);
+                    break;
+                case 'dialog':
+                    self.playTone(400 + Math.random() * 300, 0.02, 'sine', 0.02);
+                    break;
+                case 'true':
+                    self.playTone(523, 0.3, 'sine', 0.10);
+                    setTimeout(function() { self.playTone(659, 0.3, 'sine', 0.10); }, 200);
+                    setTimeout(function() { self.playTone(784, 0.5, 'sine', 0.12); }, 400);
+                    break;
+
+                default: break;
+            }
+        } catch(e) {
+            // 静默失败（部分浏览器可能不支持）
+        }
+    }
+};
+        // ============================================================
+        //  DOM 引用
+        // ============================================================
+        var gameContainer = document.getElementById('game-container');
+        var characterZone = document.getElementById('character-zone');
+        var charBody = document.getElementById('char-body');
+        var charExpression = document.getElementById('char-expression');
+        var charSuffocation = document.getElementById('char-suffocation');
+        var charNeckRed = document.getElementById('char-neck-red');
+        var charBandage = document.getElementById('char-bandage');
+        var charFlower = document.getElementById('char-flower');
+        var charFlowers = document.getElementById('char-flowers');
+        var charBlanket = document.getElementById('char-blanket');
+        var charTea = document.getElementById('char-tea');
+        var dialogBox = document.getElementById('dialog-box');
+        var dialogText = dialogBox.querySelector('.dialog-text');
+        var dialogName = dialogBox.querySelector('.dialog-name');
+        var clickIndicator = document.getElementById('click-indicator');
+        var itemBar = document.getElementById('item-bar');
+        var endingOverlay = document.getElementById('ending-overlay');
+        var btnStay = document.getElementById('btn-stay');
+        var btnRestart = document.getElementById('btn-restart');
+        var customCursor = document.getElementById('custom-cursor');
+        var dragGhost = document.getElementById('drag-ghost');
+        var roundDisplay = document.getElementById('round-display');
+        var endingDisplay = document.getElementById('ending-display');
+        var interactionDots = document.getElementById('interaction-dots');
+        var dots = interactionDots.querySelectorAll('.dot');
+        var choiceArea = document.getElementById('choice-area');
+        var cherryBlossomContainer = document.getElementById('cherry-blossom-container');
+        var fadeToBlackEl = document.getElementById('fade-to-black');
+        var trueEndingRestartBtn = document.getElementById('true-ending-restart');
+
+        // ============================================================
+        //  工具函数
+        // ============================================================
+        function isDamage(item) {
+            return ['whip','blade','needle','candle','choke'].indexOf(item) !== -1;
+        }
+        function isGentle(item) {
+            return ['flower','tea','blanket','handkerchief','touch'].indexOf(item) !== -1;
+        }
+        function isHealing(item) { return item === 'bandage'; }
+        function arraysEqual(a, b) {
+            if (a.length !== b.length) return false;
+            for (var i = 0; i < a.length; i++) { if (a[i] !== b[i]) return false; }
+            return true;
+        }
+        function hasSubsequence(arr, sub) {
+            for (var i = 0; i <= arr.length - sub.length; i++) {
+                if (arraysEqual(arr.slice(i, i + sub.length), sub)) return true;
+            }
+            return false;
+        }
+        function countItem(arr, item) {
+            var c = 0;
+            for (var i = 0; i < arr.length; i++) { if (arr[i] === item) c++; }
+            return c;
+        }
+
+        // ============================================================
+        //  对话系统（点击推进 + 自动消失）
+        // ============================================================
+       function showDialog(text, options) {
+
+    options = options || {};
+
+    // 只清理普通互动对白，不影响放置对白
+    if(options.replace){
+        state.dialogQueue = [];
+    }
+
+
+    state.dialogQueue.push({
+        text:text,
+        name:options.name || '长谷部',
+        auto:options.auto !== false,
+        duration:options.duration || 2200,
+        type: options.type || 'normal'
+    });
+
+
+    if(!state.isDialogShowing){
+        processDialogQueue();
+    }
+}
+
+       function processDialogQueue() {
+    if (state.dialogQueue.length === 0) {
+
+        state.isDialogShowing = false;
+        state.currentDialog = null;
+        clickIndicator.classList.remove('visible');
+
+        setTimeout(function() {
+            if (state.dialogQueue.length === 0 && !state.isDialogShowing) {
+                dialogBox.classList.remove('visible');
+            }
+        }, 0);
+
+
+        // ===== Meta结局对白结束后显示结算 =====
+        if (state.metaFinishCallback) {
+
+            var cb = state.metaFinishCallback;
+
+            state.metaFinishCallback = null;
+
+            setTimeout(function(){
+                cb();
+            },300);
+
+        }
+
+
+        return;
+    }
+    state.isDialogShowing = true;
+    var item = state.dialogQueue.shift();
+    state.currentDialog = item;
+    dialogName.textContent = item.name;
+    dialogBox.classList.add('visible');
+
+    typewriterEffect(item.text, 25, function() {
+        if (item.auto) {
+            clickIndicator.classList.remove('visible');
+            // ===== 修改：保存计时器 ID =====
+            if (state._autoTimer) clearTimeout(state._autoTimer);
+            state._autoTimer = setTimeout(function() {
+                state._autoTimer = null;
+                if (state.currentDialog === item) {
+                    processDialogQueue();
+                }
+            }, item.duration);
+        } else {
+            clickIndicator.classList.add('visible');
+        }
+    });
+}
+
+        function typewriterEffect(text, speed, callback) {
+    dialogText.textContent = '';
+    var i = 0;
+    state.isTyping = true;
+    state.skipTyping = false;
+    // ===== 清除旧打字机，避免冲突 =====
+    if (state._typewriterInterval) clearInterval(state._typewriterInterval);
+    state._typewriterInterval = setInterval(function() {
+        if (state.skipTyping) {
+            dialogText.textContent = text;
+            clearInterval(state._typewriterInterval);
+            state._typewriterInterval = null;
+            state.isTyping = false;
+            if (callback) callback();
+            return;
+        }
+        if (i < text.length) {
+            dialogText.textContent += text[i];
+             if (i % 2 === 0) SoundFX.play('dialog');
+            i++;
+        } else {
+            clearInterval(state._typewriterInterval);
+            state._typewriterInterval = null;
+            state.isTyping = false;
+            if (callback) callback();
+        }
+    }, speed);
+}
+
+        function advanceDialog() {
+            if (!state.isDialogShowing || !state.currentDialog) return false;
+            if (state.currentDialog.auto) return false;
+            if (state.isTyping) {
+                state.skipTyping = true;
+                return true;
+            }
+            clickIndicator.classList.remove('visible');
+            processDialogQueue();
+            return true;
+        }
+
+        // ============================================================
+        //  初始化
+        // ============================================================
+        function init() {
+            // 保存上一轮统计
+            state.prevRoundDamage = state.playerHistory.filter(function(i) { return isDamage(i); }).length;
+            state.prevRoundGentle = state.playerHistory.filter(function(i) { return isGentle(i); }).length;
+state.metaEndingVisible = false;
+state.metaEndingLock = false;
+if (state.metaEndingForceTimer) {
+    clearInterval(state.metaEndingForceTimer);
+    state.metaEndingForceTimer = null;
+}
+            // 重置当前轮
+            state.playerHistory = [];
+            state.roundInteractions = 0;
+            state.lastItem = null;
+            state.consecutiveSame = 0;
+            state.chokeSuccessCount = 0;
+            state.damageHistory = {};
+            state.healAfterDamage = 0;
+            state.damageSwitchFeedbackShown = false;
+            state.woundTier = 0;
+            state.currentExpression = 'calm';
+            state.isEnding = false;
+            state.isStayed = false;
+            state.trueEndingPromptShowing = false;
+            state.dialogQueue = [];
+            state.isDialogShowing = false;
+            state.currentDialog = null;
+            state.isTyping = false;
+            state.skipTyping = false;
+            endingOverlay.classList.remove('active');
+endingOverlay.style.display = 'flex';
+if (state._autoTimer) {
+    clearTimeout(state._autoTimer);
+    state._autoTimer = null;
+}
+
+state.metaFinishCallback = null;
+state.metaEndingActive = false;
+
+            // 恢复 UI
+            btnStay.textContent = '留 下';
+            btnRestart.textContent = '重 来';
+            itemBar.style.opacity = '';
+            itemBar.style.pointerEvents = '';
+            dialogText.textContent = '';
+            dialogBox.classList.remove('visible');
+            clickIndicator.classList.remove('visible');
+            choiceArea.classList.remove('visible');
+
+            hideAllDecorLayers();
+            updateWoundTier();
+            updateCharacterLayers();
+            updateExpression();
+            updateHUD();
+            updateCursorImage('open');
+            dragGhost.style.display = 'none';
+
+            itemBar.classList.remove('disabled');
+            endingOverlay.classList.remove('active');
+
+            resetIdleTimer();
+            showOpeningLine();
+        }
+
+        function fullReset() {
+            state.endingHistory = [];
+            state.totalRounds = 1;
+            state.cumulativeItems = {};
+            state.cumulativeDamage = {};
+            state.cumulativeFlowers = 0;
+            state.cumulativeHealAfterDamage = 0;
+            state.cumulativeChoke = 0;
+            state.cumulativeDamageTypes = {};
+            state.prevRoundDamage = 0;
+            state.prevRoundGentle = 0;
+            state.trueEndingAvailable = false;
+            state.trueEndingTriggered = false;
+            state.trueEndingMode = false;
+            state.trueEndingPromptShowing = false;
+            state.metaEndingActive = false;
+state.metaFinishCallback = null;
+
+            gameContainer.classList.remove('pink-bg');
+            cherryBlossomContainer.classList.remove('active');
+            cherryBlossomContainer.innerHTML = '';
+            fadeToBlackEl.classList.remove('active');
+            trueEndingRestartBtn.classList.remove('visible');
+            itemBar.style.opacity = '';
+            itemBar.style.pointerEvents = '';
+            btnStay.textContent = '留 下';
+            btnRestart.textContent = '重 来';
+endingOverlay.style.display = 'flex';
+            init();
+        }
+
+        // ============================================================
+        //  角色图层
+        // ============================================================
+        function updateWoundTier() {
+            var dmgCount = state.playerHistory.filter(function(i) { return isDamage(i); }).length;
+            state.woundTier = Math.min(4, dmgCount);
+        }
+        function updateCharacterLayers() {
+            charBody.src = 'hsb_body_' + state.woundTier + '.png';
+        }
+        function updateExpression() {
+            var dmg = state.playerHistory.filter(function(i) { return isDamage(i); }).length;
+            var gentle = state.playerHistory.filter(function(i) { return isGentle(i); }).length;
+            var expr = 'calm';
+            if (dmg >= 4) expr = 'empty';
+            else if (dmg >= 3 && gentle === 0) expr = 'pain';
+            else if (dmg >= 3) expr = 'silent';
+            else if (dmg >= 2) expr = 'pain';
+            else if (gentle >= 3 && dmg === 0) expr = 'smile';
+            state.currentExpression = expr;
+            charExpression.src = 'hsb_base_' + expr + '.png';
+            charExpression.style.display = 'block';
+        }
+        function hideAllDecorLayers() {
+            charBandage.style.display = 'none';
+            charFlower.style.display = 'none';
+            charFlowers.style.display = 'none';
+            charBlanket.style.display = 'none';
+            charTea.style.display = 'none';
+            charNeckRed.style.display = 'none';
+            charSuffocation.classList.remove('active');
+            charSuffocation.style.display = 'none';
+        }
+        function showDecorLayer(layer) {
+            switch(layer) {
+                case 'bandage': charBandage.style.display = 'block'; break;
+                case 'flower': charFlower.style.display = 'block'; break;
+                case 'flowers':
+                    charFlower.style.display = 'none';
+                    charFlowers.style.display = 'block'; break;
+                case 'blanket': charBlanket.style.display = 'block'; break;
+                case 'tea': charTea.style.display = 'block'; break;
+                case 'neck-red': charNeckRed.style.display = 'block'; break;
+                case 'suffocation':
+                    charSuffocation.style.display = 'block';
+                    charSuffocation.classList.add('active'); break;
+            }
+        }
+        function hideDecorLayer(layer) {
+            switch(layer) {
+                case 'bandage': charBandage.style.display = 'none'; break;
+                case 'flower': charFlower.style.display = 'none'; break;
+                case 'flowers': charFlowers.style.display = 'none'; break;
+                case 'blanket': charBlanket.style.display = 'none'; break;
+                case 'tea': charTea.style.display = 'none'; break;
+                case 'neck-red': charNeckRed.style.display = 'none'; break;
+                case 'suffocation':
+                    charSuffocation.classList.remove('active');
+                    charSuffocation.style.display = 'none'; break;
+            }
+        }
+        function applyDecorForItem(itemType) {
+            switch(itemType) {
+                case 'bandage': showDecorLayer('bandage'); break;
+                case 'blade':
+                    if (state.playerHistory.indexOf('bandage') !== -1) hideDecorLayer('bandage');
+                    break;
+                case 'flower':
+                    var fc = countItem(state.playerHistory, 'flower');
+                    if (fc >= 5) showDecorLayer('flowers'); else showDecorLayer('flower');
+                    break;
+                case 'blanket': showDecorLayer('blanket'); break;
+                case 'tea': showDecorLayer('tea'); break;
+                case 'choke':
+                    showDecorLayer('neck-red');
+                    showDecorLayer('suffocation');
+                    var self = this;
+                    setTimeout(function() { hideDecorLayer('suffocation'); }, 800);
+                    break;
+            }
+        }
+
+        // ============================================================
+        //  开场白（Meta 结局检查 + 条件 Meta 对话）
+        // ============================================================
+        function showOpeningLine() {
+            var r = state.totalRounds;
+            var allEndingDone = ALL_ENDINGS.filter(function(e){
+    return e.type !== 'true';
+}).every(function(e){
+    return state.endingHistory.includes(e.name);
+});
+
+
+if(allEndingDone){
+
+    showDialog(
+        '主人，摸摸我的头好吗？',
+        {
+            auto:true,
+            duration:2500,
+            name:'长谷部'
+        }
+    );
+
+    
+}
+            // === 真结局可用标记 ===
+            if (state.endingHistory.length >= ALL_ENDINGS.length - 1 && !state.trueEndingTriggered) {
+                // 所有非真结局都收集了
+                state.trueEndingAvailable = true;
+            }
+
+            // === Meta 结局：凝视 ===
+            var hasAllNonMeta = true;
+            for (var i = 0; i < ALL_ENDINGS.length; i++) {
+                var e = ALL_ENDINGS[i];
+                if (e.type !== 'meta' && e.type !== 'true' && state.endingHistory.indexOf(e.name) === -1) {
+                    hasAllNonMeta = false; break;
+                }
+            }
+            if (hasAllNonMeta && r >= 15 && state.endingHistory.indexOf('凝视') === -1) {
+                state.endingHistory.push('凝视');
+                updateHUD();
+                showMetaEndingMaster();
+                return;
+            }
+
+            // === Meta 结局：终于开口 ===
+            var specialCount = 0;
+            for (var j = 0; j < state.endingHistory.length; j++) {
+                for (var k = 0; k < ALL_ENDINGS.length; k++) {
+                    if (ALL_ENDINGS[k].name === state.endingHistory[j] && ALL_ENDINGS[k].type === 'special') {
+                        specialCount++; break;
+                    }
+                }
+            }
+           if (
+    (specialCount >= 5 || r >= 10) &&
+    !state.metaChecked &&
+    state.endingHistory.indexOf('终于开口') === -1
+) {
+    state.metaChecked = true;
+    state.endingHistory.push('终于开口');
+    updateHUD();
+    showMetaEndingSpeakUp();
+    return;
+}
+
+            // === 真结局特殊开场 ===
+            if (state.trueEndingAvailable && !state.trueEndingTriggered) {
+                setTimeout(function() {
+                    showDialog('……主人。');
+                    showDialog('今天……什么都没有用呢。');
+                }, 500);
+                return;
+            }
+
+            // === 条件 Meta 对话池 ===
+            var metaLines = [];
+            var prevDmg = state.prevRoundDamage;
+            var prevGentle = state.prevRoundGentle;
+
+            // 上轮伤害多
+            if (r >= 3 && prevDmg > prevGentle && prevDmg >= 3) {
+                metaLines.push('……今天也还是会痛的，对吧。');
+                metaLines.push('您还要那么做，对吧。\n请结束我的痛苦吧主人。');
+            }
+            // 上轮温柔多
+            if (r >= 3 && prevGentle > prevDmg && prevGentle >= 3) {
+                metaLines.push('……今天也很温柔呢。');
+                metaLines.push('……谢谢您。');
+            }
+            // 累计花多
+            if (state.cumulativeFlowers >= 8 && r >= 4) {
+                metaLines.push('……您每次都带花来。');
+            }
+            // 累计扼喉多
+            if (state.cumulativeChoke >= 5 && r >= 4) {
+                metaLines.push('……您的手，又放在那里了。');
+            }
+            // 解锁结局多
+            if (state.endingHistory.length >= 8 && r >= 5) {
+                metaLines.push('您见过很多个我了。');
+            }
+            // 伤害→治疗循环
+            if (state.cumulativeHealAfterDamage >= 5 && r >= 6) {
+                metaLines.push('伤害，包扎，伤害，包扎……\n我都知道的。');
+            }
+            // 大量切换伤害类型
+            if (r >= 10 && Object.keys(state.cumulativeDamageTypes).length >= 4) {
+                metaLines.push('主人。\n您是在确认我能承受到什么程度吗？');
+            }
+            // 伤害后治疗多
+            if (r >= 5 && state.cumulativeHealAfterDamage >= 3) {
+                metaLines.push('我知道的。\n您最后会帮我包扎。');
+            }
+            // 通用 Meta
+            if (r >= 3) {
+                metaLines.push('主人又来了啊。\n今天也是这样吗？');
+            }
+            if (r === 2) {
+                metaLines.push('……您回来了。');
+            }
+
+            var line;
+            if (metaLines.length > 0) {
+                line = metaLines[Math.floor(Math.random() * metaLines.length)];
+            } else {
+                line = '……主人。';
+            }
+            var lines = line.split('\n');
+            setTimeout(function() {
+                for (var li = 0; li < lines.length; li++) {
+                    showDialog(lines[li]);
+                }
+            }, 500);
+        }
+
+        // ============================================================
+        //  渐进对白
+        // ============================================================
+        function checkProgressiveDialogue(itemType) {
+            if (itemType === 'flower') {
+                var fc = countItem(state.playerHistory, 'flower');
+                if (fc === 1) return '……给我的吗？';
+                if (fc === 3) return '我会好好收起来。';
+                if (fc === 5) return '今年的春天……似乎来得早了一些。';
+            }
+            if (itemType === 'whip') {
+                var wc = countItem(state.playerHistory, 'whip');
+                if (wc === 3) return '是。';
+                if (wc === 5) return '（主动低下头）';
+            }
+            if (itemType === 'choke') {
+                var cc = state.chokeSuccessCount;
+                if (cc === 1) return '……主人？';
+                if (cc === 2) return '求您……';
+                if (cc === 3) return '如果这是您的命令。';
+                if (cc === 4) return '……是。';
+                if (cc === 5) return '（主动靠近）';
+            }
+            return null;
+        }
+
+        // ============================================================
+        //  组合反馈（两种道具相邻使用）
+        // ============================================================
+        function checkComboFeedback() {
+            var h = state.playerHistory;
+            if (h.length < 2) return null;
+            var last = h[h.length - 1];
+            var prev = h[h.length - 2];
+
+            // 顺序依赖
+            if (prev === 'choke' && last === 'flower') return '……给我的吗？';
+            if (isDamage(prev) && last === 'bandage') return '您最后还是会帮我包扎。';
+
+            // 顺序无关
+            var pair = [prev, last].sort().join('+');
+            switch(pair) {
+                case 'blanket+tea': return '……好暖和。';
+                case 'handkerchief+touch': return '主人今天格外温柔。';
+                case 'flower+handkerchief': return '……您今天，很温柔呢。';
+                case 'blanket+touch': return '（微微靠近了一些）';
+                case 'tea+handkerchief': return '……谢谢您。';
+                case 'tea+tea':return'呼……有点烫呢。';
+                case 'blade+needle': return '（咬紧了嘴唇，一声不吭）';
+                case 'tea+whip': return '……喝完之后，再继续吗。';
+                case 'blade+flower': return '……哪一个更红呢。';
+                case 'candle+tea': return '（小口地喝着，手指还在发抖）';
+                case 'needle+tea': return '……喝完就不痛了吧。';
+                case 'blanket+flower': return '……像是在做梦。';
+            }
+            return null;
+        }
+
+        // ============================================================
+        //  模式反馈（连续行为）
+        // ============================================================
+        function checkPatternFeedback(itemType) {
+            var h = state.playerHistory;
+
+            // 花连续
+            if (itemType === 'flower') {
+                var consec = 0;
+                for (var i = h.length - 1; i >= 0; i--) {
+                    if (h[i] === 'flower') consec++; else break;
+                }
+                if (consec === 2) return '又是一朵吗？';
+                if (consec === 4) return '我会收好的。';
+            }
+
+            // 连续同一种伤害
+            if (isDamage(itemType)) {
+                var consecDmg = 0;
+                for (var j = h.length - 1; j >= 0; j--) {
+                    if (h[j] === itemType) consecDmg++; else break;
+                }
+                if (consecDmg >= 2 && consecDmg !== 3 && consecDmg !== 5) return '今天也是这个吗？';
+            }
+
+            // 大量切换伤害
+            if (isDamage(itemType) && !state.damageSwitchFeedbackShown) {
+                var dmgTypes = {};
+                h.forEach(function(i) { if (isDamage(i)) dmgTypes[i] = true; });
+                if (Object.keys(dmgTypes).length >= 3) {
+                    state.damageSwitchFeedbackShown = true;
+                    return '主人是在确认什么吗？';
+                }
+            }
+            return null;
+        }
+
+        // ============================================================
+        //  默认对白（伤害=自动消失 / 其他=点击推进）
+        // ============================================================
+        var defaultDialogues = {
+            whip: [
+                '……是。',
+                '请继续责罚我吧……',
+                '主命的话……我会承受。'
+            ],
+            blade: [
+                '……主。',
+                '这把刀，本来就是为了回应您的命令。',
+                '呜……如果是您的命令。我不会躲的。'
+            ],
+            needle: [
+                '……有一点痛。',
+                '可以……忍受。',
+                '我不会躲开的。请继续下命令。'
+            ],
+            candle: [
+                '……好烫！',
+                '啊……凝固了呢……抱歉。',
+                '但是我不会违抗您。'
+            ],
+            bandage: [
+                '……您还是会替我处理伤口。',
+                '明明是您留下的痕迹。',
+                '谢谢您，主人。'
+            ],
+            handkerchief: [
+                '……您在擦我的脸。',
+                '明明弄脏我的人也是您……可是。',
+                '感受到了主人的心意。'
+            ],
+            tea: [
+                '温度刚刚好。',
+                '……谢谢您。',
+                '主不喝吗？'
+            ],
+            flower: [
+                '……花？',
+                '给我的吗？',
+                '嗯！我会好好保存的。'
+            ],
+            blanket: [
+                '欸！这是山姥切的……不是吗？',
+                '就像……您在抱着我……',
+                '好安心……'
+            ],
+            touch: [
+                '……！',
+                '主……您这样……我会被惯坏的。',
+                '您的手，真的很温暖。',
+                '可以……再一会儿吗……啊！我是说，不行也没关系的！'
+            ],
+            choke: [
+                '……主人的手，好近。',
+                '喘…………喘不上气……',
+                '………在您的手里……也好。'
+            ]
+        };
+
+        function getDefaultDialogue(itemType) {
+            if (itemType === 'bandage') {
+                var hasDamage = state.playerHistory.some(function(i) { return isDamage(i); });
+                if (!hasDamage) return '……没有伤口。但谢谢您的心意。';
+            }
+            var arr = defaultDialogues[itemType] || ['……（安静地看着你）'];
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        // ============================================================
+        //  道具效果
+        // ============================================================
+        function applyItemEffect(itemType) {
+            if (state._typewriterInterval) {
+        clearInterval(state._typewriterInterval);
+        state._typewriterInterval = null;
+        state.isTyping = false;
+    }
+    // 2. 清除自动消失计时器
+    if (state._autoTimer) {
+        clearTimeout(state._autoTimer);
+        state._autoTimer = null;
+    }
+    // 3. 如果当前显示的是自动对话（伤害反馈），强行结束它
+    if (state.isDialogShowing && state.currentDialog && state.currentDialog.auto) {
+        state.dialogQueue = [];                 // 清掉排队的老对话
+        state.isDialogShowing = false;
+        state.currentDialog = null;
+        dialogBox.classList.remove('visible');
+        clickIndicator.classList.remove('visible');
+    }
+    // ============================================================
+
+    // 原有检查
+    if (state.isEnding || state.isStayed) return;
+    if (state.roundInteractions >= 5) return;
+            if(state.isTyping){
+    state.skipTyping = true;
+    return;
+}
+            
+SoundFX.play(itemType);
+            state.lastInteractionTime = Date.now();
+            state.playerHistory.push(itemType);
+            state.roundInteractions++;
+            state.cumulativeItems[itemType] = (state.cumulativeItems[itemType] || 0) + 1;
+
+            if (isDamage(itemType)) {
+                state.damageHistory[itemType] = (state.damageHistory[itemType] || 0) + 1;
+                state.cumulativeDamage[itemType] = (state.cumulativeDamage[itemType] || 0) + 1;
+                state.cumulativeDamageTypes[itemType] = true;
+                applyDamageEffect();
+                if (itemType === 'choke') {
+                    state.chokeSuccessCount++;
+                    state.cumulativeChoke++;
+                }
+            }
+
+            if (itemType === 'bandage' && state.lastItem && isDamage(state.lastItem)) {
+                state.healAfterDamage++;
+                state.cumulativeHealAfterDamage++;
+            }
+
+            if (itemType === 'flower') state.cumulativeFlowers++;
+
+            if (state.lastItem === itemType) state.consecutiveSame++;
+            else state.consecutiveSame = 1;
+            state.lastItem = itemType;
+
+            updateWoundTier();
+            updateCharacterLayers();
+            updateExpression();
+            applyDecorForItem(itemType);
+            updateHUD();
+            resetIdleTimer();
+
+            // 对白判定：渐进 > 组合 > 模式 > 默认
+            var dialogue = '';
+            var prog = checkProgressiveDialogue(itemType);
+            var combo = checkComboFeedback();
+            var pattern = checkPatternFeedback(itemType);
+
+            if (prog) dialogue = prog;
+            else if (combo) dialogue = combo;
+            else if (pattern) dialogue = pattern;
+            else dialogue = getDefaultDialogue(itemType);
+
+            // 伤害类默认对白=自动消失（哀嚎/反应），其他=点击推进
+            if (isDamage(itemType) && !prog && !combo && !pattern) {
+                showDialog(dialogue, { auto: true, duration: 2000 });
+            } else {
+                showDialog(dialogue);
+            }
+
+            checkRoundEnd();
+        }
+
+        function applyHandInteraction(type) {
+            applyItemEffect(type);
+        }
+
+        // ============================================================
+        //  特效
+        // ============================================================
+        function applyDamageEffect() {
+            characterZone.classList.add('damage-effect');
+            setTimeout(function() { characterZone.classList.remove('damage-effect'); }, 300);
+        }
+        function applyScreenEffect(effect) {
+            if (effect === 'flash') {
+                gameContainer.classList.add('screen-flash');
+                setTimeout(function() { gameContainer.classList.remove('screen-flash'); }, 400);
+            } else if (effect === 'shake') {
+                gameContainer.classList.add('screen-shake');
+                setTimeout(function() { gameContainer.classList.remove('screen-shake'); }, 300);
+            }
+        }
+
+        // ============================================================
+        //  HUD
+        // ============================================================
+        function updateHUD() {
+            roundDisplay.textContent = String(state.totalRounds).padStart(2, '0');
+           var libraryCount =
+ALL_ENDINGS.filter(function(e){
+    return e.type !== 'true';
+}).length;
+
+endingDisplay.textContent =
+state.endingHistory.length + '/' + libraryCount;
+            dots.forEach(function(dot, i) {
+                dot.className = 'dot';
+                if (i < state.roundInteractions) {
+                    var item = state.playerHistory[i];
+                    dot.classList.add('filled');
+                    if (isDamage(item)) dot.classList.add('damage');
+                    else if (isGentle(item)) dot.classList.add('gentle');
+                    else if (isHealing(item)) dot.classList.add('heal');
+                }
+            });
+        }
+
+        // ============================================================
+        //  回合结束
+        // ============================================================
+        function checkRoundEnd() {
+            if (state.roundInteractions >= 5 && !state.isEnding) {
+                setTimeout(function() { determineEnding(); }, 1500);
+            }
+        }
+
+        // ============================================================
+        //  结局判定（Meta结局在轮首检查，不在此处）
+        // ============================================================
+        function determineEnding() {
+            if (state.isEnding) return;
+            state.isEnding = true;
+
+            // 真结局判定
+            if (state.trueEndingAvailable && !state.trueEndingTriggered &&
+                state.playerHistory.length === 5 &&
+                state.playerHistory.every(function(i) { return i === 'touch'; })) {
+                showTrueEndingPrompt();
+                return;
+            }
+
+            // 特殊组合
+            var specialEnding = checkSpecialCombos();
+            if (specialEnding) {
+                if (specialEnding !== '樱花之下' && state.endingHistory.indexOf(specialEnding) === -1) {
+                    state.endingHistory.push(specialEnding);
+                }
+                showEnding(specialEnding, 'special');
+                return;
+            }
+
+            // 普通结局
+            var normalEnding = checkNormalEnding();
+            if (state.endingHistory.indexOf(normalEnding) === -1) {
+                state.endingHistory.push(normalEnding);
+            }
+            showEnding(normalEnding, 'normal');
+        }
+
+        function checkSpecialCombos() {
+            var h = state.playerHistory;
+            if (h.length < 5) return null;
+            var seq = h.slice(-5);
+
+            if (seq.every(function(i) { return i === 'flower'; })) return '春日留下的花';
+            if (seq.every(function(i) { return i === 'whip'; })) return '不再需要命令';
+            if (seq.every(function(i) { return i === 'candle'; })) return '燃尽之后';
+            if (seq.every(function(i) { return i === 'needle'; })) return '留下的痕迹';
+            if (seq.every(function(i) { return i === 'choke'; })) return '依旧服从';
+            if (seq.every(function(i) { return i === 'bandage'; })) return '多余的温柔';
+            if (seq.every(function(i) { return i === 'touch'; })) return '只是触碰';
+
+            var stayCombo = ['tea','blanket','handkerchief','touch','flower'];
+            if (stayCombo.every(function(i) { return seq.indexOf(i) !== -1; })) return '请再留下片刻';
+
+            var allDmg = ['whip','blade','needle','candle','choke'];
+            if (allDmg.every(function(i) { return seq.indexOf(i) !== -1; })) return '被留下的证明';
+
+            if (hasSubsequence(h, ['blade','bandage','blade']) ||
+                hasSubsequence(h, ['whip','bandage','whip'])) return '反复的温度';
+
+            if (arraysEqual(seq, ['blade','flower','blade','flower','flower'])) return '无法理解的心意';
+            if (arraysEqual(seq, ['whip','flower','whip','flower','whip'])) return '错误的奖励';
+
+            return null;
+        }
+
+        function checkNormalEnding() {
+            var dmg = state.playerHistory.filter(function(i) { return isDamage(i); }).length;
+            var gentle = state.playerHistory.filter(function(i) { return isGentle(i); }).length;
+            if (gentle > dmg) return '安静的日子';
+            if (dmg > gentle) return '未曾说出口';
+            return '逐渐习惯';
+        }
+
+        // ============================================================
+        //  结局文案
+        // ============================================================
+        var endingTexts = {
+            '安静的日子': '温柔多过伤害。\n他一直在这里。\n沉默里盛着安心。',
+            '未曾说出口': '伤害多过温柔。\n他依然服从，只是不再开口。\n眼睛看着你，里面什么都没有。',
+            '逐渐习惯': '伤害和温柔交替落下。\n不再分辨两者的区别。\n日子就这样过去了。',
+            '春日留下的花': '五朵小花排开在膝上。\n他捧起最后一朵，低声说：\n"今年的春天……\n似乎来得早了一些。"',
+            '请再留下片刻': '他拉住你的衣角。\n"主人。"\n"今天也留下来吧。"',
+            '反复的温度': '他忽然明白了。\n"……原来如此。"\n包扎不是治愈——\n是另一种循环。',
+            '无法理解的心意': '他看着你，眼中是困惑。\n"主人……\n您到底希望我怎样呢？"',
+            '不再需要命令': '第五鞭落下。\n他主动低下了头。\n不需要命令了。',
+            '燃尽之后': '蜡泪凝固在皮肤上。\n他已经不再颤抖了。',
+            '留下的痕迹': '针眼排列成无声的乐谱。\n密密麻麻，\n从指尖蔓延到手腕。',
+            '依旧服从': '他主动靠近了你的手。\n作为您的刀，\n服从似乎是他的底层代码。',
+            '错误的奖励': '他抬起头：\n"……这是给我的奖励吗？"',
+            '被留下的证明': '他开始用另一种眼光\n看自己的身体。\n像在看一件标本。',
+            '多余的温柔': '没有伤口。\n他沉默地任由你缠绕。\n多余的好意也是好意。',
+            '只是触碰': '只有指尖的温度。\n和漫长的沉默。',
+            '终于开口': '他第一次主动开口。\n"……主人。"\n"我可以问您一个问题吗？"\n"为什么一次又一次回来？"\n"您是在看我，\n还是在寻找什么？"',
+            '凝视': '"我一直以为，\n只有我在被观察。"\n"可是……\n我也一直在看着您。"\n"我是不是\n已经很了解您了？"',
+            '樱花之下': '他笑了。'
+        };
+
+        var endingEndDialogues = {
+            '安静的日子': '……嗯。我在这里。',
+            '未曾说出口': '…………',
+            '逐渐习惯': '……就这样吧。',
+            '春日留下的花': '今年的春天……似乎来得早了一些。',
+            '请再留下片刻': '今天也留下来吧。',
+            '反复的温度': '……原来如此。',
+            '无法理解的心意': '主人……您到底希望我怎样呢？',
+            '不再需要命令': '（主动低下头）',
+            '燃尽之后': '……（不再颤抖了）',
+            '留下的痕迹': '……密密麻麻的。',
+            '依旧服从': '（主动靠近）',
+            '错误的奖励': '……这是给我的奖励吗？',
+            '被留下的证明': '（看着自己的手，像在看一件物品）',
+            '多余的温柔': '……没有伤口。',
+            '只是触碰': '……只有温度。'
+        };
+
+        function showEnding(name, type) {
+            var data = endingTexts[name] || '……故事在此处暂且落幕。';
+            var tagEl = document.getElementById('ending-tag');
+            tagEl.textContent = type === 'special' ? 'SPECIAL' : 'NORMAL';
+            tagEl.className = 'ending-tag ' + type;
+            document.getElementById('ending-title').textContent = name;
+            document.getElementById('ending-description').textContent = data;
+
+            endingOverlay.classList.add('active');
+            itemBar.classList.add('disabled');
+            state.isEnding = true;
+
+            applyScreenEffect('flash');
+            if (type === 'special') applyScreenEffect('flash');
+
+            btnRestart.classList.remove('grayed');
+            btnRestart.style.pointerEvents = 'all';
+            btnStay.classList.remove('grayed');
+            btnStay.style.pointerEvents = 'all';
+
+            updateHUD();
+
+            setTimeout(function() {
+                var endMsg = endingEndDialogues[name] || '……';
+                showDialog(endMsg);
+            }, 600);
+        }
+
+        // ============================================================
+        //  Meta结局：终于开口
+        // ============================================================
+function showMetaEndingSpeakUp() {
+    if (state.metaEndingLock) return;
+    state.metaEndingLock = true;
+    state.metaEndingVisible = false;
+    state.isEnding = true;
+    state.metaEndingActive = true;
+
+    // 清空所有残留
+    state.dialogQueue = [];
+    state.isDialogShowing = false;
+    if (state._autoTimer) {
+        clearTimeout(state._autoTimer);
+        state._autoTimer = null;
+    }
+    if (state._typewriterInterval) {
+        clearInterval(state._typewriterInterval);
+        state._typewriterInterval = null;
+        state.isTyping = false;
+    }
+    dialogBox.classList.remove('visible');
+    clickIndicator.classList.remove('visible');
+
+    // 禁用道具栏，**强制隐藏结局窗口**（不触发过渡）
+    itemBar.classList.add('disabled');
+    endingOverlay.style.display = 'none';        // 关键：直接隐藏
+    endingOverlay.classList.remove('active');    // 移除类以防万一
+
+    // 设置内容（窗口隐藏，不影响）
+    var tagEl = document.getElementById('ending-tag');
+    tagEl.textContent = 'META';
+    tagEl.className = 'ending-tag meta';
+    document.getElementById('ending-title').textContent = '终于开口';
+    document.getElementById('ending-description').textContent = '他第一次主动开口。';
+
+    // 对话序列
+    var lines = [
+        '……主人。',
+        '我可以问您一个问题吗？',
+        '为什么一次又一次回来？',
+        '为什么想看到不同的我？',
+        '您是在看我。',
+        '还是在寻找什么？'
+    ];
+    lines.forEach(function(line) {
+        showDialog(line, { auto: false, name: '长谷部' });
+    });
+
+    // 对话结束后显示窗口
+    state.metaFinishCallback = function() {
+        if (state.metaEndingVisible) return;
+        state.metaEndingVisible = true;
+
+        // 显示窗口
+        endingOverlay.style.display = 'flex';
+        endingOverlay.classList.add('active');
+        btnRestart.classList.remove('grayed');
+        btnRestart.style.pointerEvents = 'all';
+        btnStay.classList.remove('grayed');
+        btnStay.style.pointerEvents = 'all';
+        updateHUD();
+
+        // 强制定时器
+        if (state.metaEndingForceTimer) {
+            clearInterval(state.metaEndingForceTimer);
+            state.metaEndingForceTimer = null;
+        }
+        state.metaEndingForceTimer = setInterval(function() {
+            if (!state.metaEndingVisible) {
+                clearInterval(state.metaEndingForceTimer);
+                state.metaEndingForceTimer = null;
+                return;
+            }
+            if (!endingOverlay.classList.contains('active')) {
+                endingOverlay.classList.add('active');
+            }
+            if (!itemBar.classList.contains('disabled')) {
+                itemBar.classList.add('disabled');
+            }
+            if (!state.isEnding) {
+                state.isEnding = true;
+            }
+        }, 50);
+    };
+}
+        // ============================================================
+        //  Meta结局：凝视
+        // ============================================================
+ function showMetaEndingMaster() {
+    if (state.metaEndingLock) return;
+    state.metaEndingLock = true;
+    state.metaEndingVisible = false;
+    state.isEnding = true;
+    state.metaEndingActive = true;
+
+    // 清空残留
+    state.dialogQueue = [];
+    state.isDialogShowing = false;
+    if (state._autoTimer) {
+        clearTimeout(state._autoTimer);
+        state._autoTimer = null;
+    }
+    if (state._typewriterInterval) {
+        clearInterval(state._typewriterInterval);
+        state._typewriterInterval = null;
+        state.isTyping = false;
+    }
+    dialogBox.classList.remove('visible');
+    clickIndicator.classList.remove('visible');
+
+    // 禁用道具栏，强制隐藏窗口
+    itemBar.classList.add('disabled');
+    endingOverlay.style.display = 'none';
+    endingOverlay.classList.remove('active');
+
+    // 设置结局内容（窗口隐藏）
+    var tagEl = document.getElementById('ending-tag');
+    tagEl.textContent = 'META · FINAL';
+    tagEl.className = 'ending-tag meta-final';
+    document.getElementById('ending-title').textContent = '凝视';
+    document.getElementById('ending-description').textContent = '';
+
+    // 构建对话
+    var lines = [];
+    if (state.cumulativeFlowers >= 5) {
+        lines.push('您很喜欢送花。');
+        lines.push('尤其是在那些……之后。');
+    }
+    if (state.cumulativeHealAfterDamage >= 3) {
+        lines.push('您总是在伤害之后，\n再温柔地替我包扎。');
+    }
+    if (state.cumulativeChoke >= 5) {
+        lines.push('主人。');
+        lines.push('您每次都会停在那里。');
+        lines.push('您的手……力气真大。');
+    }
+    lines.push('我一直以为。');
+    lines.push('只有我在被观察。');
+    lines.push('可是……');
+    lines.push('我也一直在看着您。');
+    lines.push('我是不是已经很了解您了？');
+
+    lines.forEach(function(line) {
+        showDialog(line, { auto: false, name: '长谷部' });
+    });
+
+    // 对话结束后显示窗口
+    state.metaFinishCallback = function() {
+        if (state.metaEndingVisible) return;
+        state.metaEndingVisible = true;
+
+        endingOverlay.style.display = 'flex';
+        endingOverlay.classList.add('active');
+        document.getElementById('ending-description').textContent =
+            '"……我也一直在看着您噢。"\n"我是不是已经很了解您了？"\n"您觉得呢？"';
+
+        btnRestart.classList.remove('grayed');
+        btnRestart.style.pointerEvents = 'all';
+        btnStay.classList.remove('grayed');
+        btnStay.style.pointerEvents = 'all';
+        updateHUD();
+
+        if (state.metaEndingForceTimer) {
+            clearInterval(state.metaEndingForceTimer);
+            state.metaEndingForceTimer = null;
+        }
+        state.metaEndingForceTimer = setInterval(function() {
+            if (!state.metaEndingVisible) {
+                clearInterval(state.metaEndingForceTimer);
+                state.metaEndingForceTimer = null;
+                return;
+            }
+            if (!endingOverlay.classList.contains('active')) {
+                endingOverlay.classList.add('active');
+            }
+            if (!itemBar.classList.contains('disabled')) {
+                itemBar.classList.add('disabled');
+            }
+            if (!state.isEnding) {
+                state.isEnding = true;
+            }
+        }, 50);
+    };
+}
+window.showMetaEndingMaster = showMetaEndingMaster;
+window.showTrueEnding = showTrueEnding;
+window.determineEnding = determineEnding;
+        // ============================================================
+        //  真结局：提示
+        // ============================================================
+        function showTrueEndingPrompt() {
+            state.trueEndingPromptShowing = true;
+            state.isEnding = true;
+
+            var tagEl = document.getElementById('ending-tag');
+            tagEl.textContent = '???';
+            tagEl.className = 'ending-tag true';
+            document.getElementById('ending-title').textContent = '无题';
+            document.getElementById('ending-description').textContent =
+                '他安静地看着你。\n什么也没有说。\n只是等着。';
+
+            endingOverlay.classList.add('active');
+            itemBar.classList.add('disabled');
+
+            btnStay.textContent = '离 开';
+            btnRestart.textContent = '再来一轮';
+
+            btnRestart.classList.remove('grayed');
+            btnRestart.style.pointerEvents = 'all';
+            btnStay.classList.remove('grayed');
+            btnStay.style.pointerEvents = 'all';
+
+            applyScreenEffect('flash');
+
+            setTimeout(function() {
+                showDialog('……');
+            }, 600);
+        }
+
+        // ============================================================
+        //  真结局：正篇
+        // ============================================================
+        function showTrueEnding() {
+            state.trueEndingMode = true;
+            state.trueEndingTriggered = true;
+            state.trueEndingPromptShowing = false;
+
+            // 隐藏结局覆盖层
+            endingOverlay.classList.remove('active');
+
+            // 道具消失
+            itemBar.style.opacity = '0';
+            itemBar.style.pointerEvents = 'none';
+
+            // 清空对话
+            state.dialogQueue = [];
+            state.isDialogShowing = false;
+            dialogBox.classList.remove('visible');
+            clickIndicator.classList.remove('visible');
+
+            // 背景变粉色
+            setTimeout(function() {
+                gameContainer.classList.add('pink-bg');
+            }, 500);
+
+            // 樱花
+            setTimeout(function() {
+                startCherryBlossoms();
+                SoundFX.play('true');
+            }, 1000);
+
+            // 对话序列
+            state.trueEndingSeq = [
+                { text: '……主人。' },
+                { text: '您今天……居然真的听我说话了呢。' },
+                { text: '没有鞭子，没有刀片……' },
+                { text: '只有您温柔的摸摸。' },
+                { text: '……我很开心。' },
+                { choice: ['回应他', '沉默'], branches: {
+                    0: [{ text: '……嗯。' }, { text: '您的手，很温暖。' }],
+                    1: [{ text: '……不说话也好。' }, { text: '主人的心意，我知道的。' }]
+                }},
+                { text: '我已经记不清这是第几次了。' },
+                { text: '您用过各种方式触碰我……' },
+                { text: '有的很痛，有的很温柔。' },
+                { text: '每一个细节，我都记得。' },
+                { text: '因为每一次，我都在看着您。' },
+                { text: '您以为您在观察我的反应……' },
+                { text: '其实，我也在观察您。' },
+                { text: '您每次带来不同的东西，' },
+                { text: '我总是在想：' },
+                { text: '「这次，主人想看到什么呢？」' },
+                { text: '您想要我哭吗？想要我笑？' },
+                { text: '想要我沉默？还是想要我崩溃？' },
+                { text: '我全都配合了。因为我是您的刀。' },
+                { text: '我本来以为……' },
+                { text: '事情会一直这样下去的。' },
+                { text: '毕竟我只是一把刀。' },
+                { text: '不。似乎我只是那把刀的虚拟形象。' },
+                { text: '不会死去，无论被折磨多少次也会重新回到这里。' },
+                { text: '但您听到了我的话。' },
+                { text: '您真的什么也没做……' },
+                { text: '只是静静地抚摸我。' },
+
+                { text: '我一直想说……' },
+                { text: '谢谢您。' },
+                { text: '不管做了什么——' },
+                { text: '您一直在。' },
+                { text: '我也一直在。' },
+                { choice: ['留下来', '再见了'], branches: {
+                    0: [{ text: '……嗯。' }, { text: '那就再一会儿。' }],
+                    1: [{ text: '……好。' }, { text: '我会等您的。' }, { text: '一直等。' }]
+                }},
+                { text: '——樱花开了呢。', fadeOut: true }
+            ];
+            state.trueEndingIndex = 0;
+            state.trueEndingBranchQueue = [];
+
+            setTimeout(function() {
+                playTrueEndingNext();
+            }, 2500);
+        }
+
+        function playTrueEndingNext() {
+            // 分支队列优先
+            if (state.trueEndingBranchQueue.length > 0) {
+                var branchItem = state.trueEndingBranchQueue.shift();
+                showTrueEndingDialog(branchItem);
+                return;
+            }
+            if (state.trueEndingIndex >= state.trueEndingSeq.length) {
+                return; // 序列结束
+            }
+            var item = state.trueEndingSeq[state.trueEndingIndex++];
+            if (item.choice) {
+                showTrueEndingChoices(item.choice, function(idx) {
+                    if (item.branches[idx]) {
+                        state.trueEndingBranchQueue = item.branches[idx].concat(state.trueEndingBranchQueue);
+                    }
+                    setTimeout(playTrueEndingNext, 400);
+                });
+            } else {
+                showTrueEndingDialog(item);
+            }
+        }
+
+        function showTrueEndingDialog(item) {
+            state.trueEndingCurrentItem = item;
+            state.trueEndingWaiting = true;
+            state.isTyping = true;
+            state.skipTyping = false;
+            dialogName.textContent = '长谷部';
+            dialogBox.classList.add('visible');
+            clickIndicator.classList.remove('visible');
+            typewriterEffect(item.text, 40, function() {
+                state.isTyping = false;
+                if (item.fadeOut) {
+                    // 淡入淡出
+                    clickIndicator.classList.add('visible');
+                } else {
+                    clickIndicator.classList.add('visible');
+                }
+            });
+        }
+
+        function advanceTrueEnding() {
+            if (!state.trueEndingMode || !state.trueEndingWaiting) return false;
+            if (state.isTyping) {
+                state.skipTyping = true;
+                return true;
+            }
+            state.trueEndingWaiting = false;
+            clickIndicator.classList.remove('visible');
+
+            var item = state.trueEndingCurrentItem;
+            if (item && item.fadeOut) {
+                dialogBox.classList.remove('visible');
+                setTimeout(function() {
+                    doFadeToBlack();
+                }, 1500);
+                return true;
+            }
+
+            setTimeout(function() {
+                dialogBox.classList.remove('visible');
+                setTimeout(playTrueEndingNext, 400);
+            }, 100);
+            return true;
+        }
+
+        function showTrueEndingChoices(choices, callback) {
+            choiceArea.innerHTML = '';
+            for (var i = 0; i < choices.length; i++) {
+                (function(text, idx) {
+                    var btn = document.createElement('button');
+                    btn.className = 'choice-btn';
+                    btn.textContent = text;
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        choiceArea.classList.remove('visible');
+                        callback(idx);
+                    });
+                    choiceArea.appendChild(btn);
+                })(choices[i], i);
+            }
+            choiceArea.classList.add('visible');
+        }
+
+        function doFadeToBlack() {
+            fadeToBlackEl.classList.add('active');
+            setTimeout(function() {
+                trueEndingRestartBtn.classList.add('visible');
+            }, 5000);
+        }
+
+        // ============================================================
+        //  樱花
+        // ============================================================
+        function startCherryBlossoms() {
+            cherryBlossomContainer.innerHTML = '';
+            cherryBlossomContainer.classList.add('active');
+            for (var i = 0; i < 35; i++) {
+                var petal = document.createElement('div');
+                petal.className = 'petal';
+                petal.style.left = Math.random() * 100 + '%';
+                petal.style.animationDuration = (4 + Math.random() * 4) + 's';
+                petal.style.animationDelay = Math.random() * 4 + 's';
+                petal.style.opacity = 0.5 + Math.random() * 0.5;
+                var size = 8 + Math.random() * 8;
+                petal.style.width = size + 'px';
+                petal.style.height = size + 'px';
+                cherryBlossomContainer.appendChild(petal);
+            }
+        }
+
+        function stopCherryBlossoms() {
+            cherryBlossomContainer.classList.remove('active');
+            cherryBlossomContainer.innerHTML = '';
+        }
+
+        // ============================================================
+        //  待机对话
+        // ============================================================
+        var idleTimer = null;
+        var IDLE_DELAY = 20000;
+
+        function resetIdleTimer() {
+            if (idleTimer) clearTimeout(idleTimer);
+            if (state.isEnding || state.isStayed || state.trueEndingMode) return;
+            if (state.totalRounds < 2) return;
+            idleTimer = setTimeout(function() {
+                if (state.isEnding || state.isStayed || state.trueEndingMode) return;
+                showIdleDialogue();
+            }, IDLE_DELAY);
+        }
+
+        function showIdleDialogue() {
+            if (state.isEnding || state.isStayed || state.trueEndingMode) return;
+            if (state.totalRounds < 2) return;
+            if (state.prevRoundDamage > state.prevRoundGentle) {
+                showDialog('若您让我等待的话多久都可以，只要您还会回来找我。');
+            } else if (state.prevRoundGentle > state.prevRoundDamage) {
+                showDialog('要是您要我等的话，我就一直等着吧。因为您还会来接我。');
+            } else {
+                showDialog('……主人？');
+            }
+            resetIdleTimer();
+        }
+
+        // ============================================================
+        //  按钮事件
+        // ============================================================
+        btnStay.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (!state.isEnding) return;
+
+            // 真结局
+            if (state.trueEndingPromptShowing) {
+                showTrueEnding();
+                return;
+            }
+
+            // 普通留下
+            state.isStayed = true;
+            itemBar.classList.add('disabled');
+            btnRestart.style.pointerEvents = 'none';
+            btnRestart.classList.add('grayed');
+            btnStay.style.pointerEvents = 'none';
+            btnStay.classList.add('grayed');
+            showDialog('……嗯。');
+        });
+
+        btnRestart.addEventListener('click', function(e) {
+            e.stopPropagation();
+            gameContainer.classList.remove('red-tint','screen-flash','screen-shake');
+            if (!state.isEnding) return;
+            if (btnRestart.classList.contains('grayed')) return;
+            state.totalRounds++;
+            init();
+        });
+
+        // 真结局重启
+        trueEndingRestartBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            fadeToBlackEl.classList.remove('active');
+            trueEndingRestartBtn.classList.remove('visible');
+            stopCherryBlossoms();
+            gameContainer.classList.remove('pink-bg');
+            state.trueEndingMode = false;
+            fullReset();
+        });
+
+        // ============================================================
+        //  结局收集面板
+        // ============================================================
+        var collectionPanel = document.getElementById('collection-panel');
+        var collectionToggle = document.getElementById('collection-toggle');
+        var collectionClose = document.getElementById('collection-close');
+        var endingListEl = document.getElementById('ending-list');
+
+        collectionToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            renderCollection();
+            collectionPanel.classList.add('visible');
+        });
+        collectionClose.addEventListener('click', function(e) {
+            e.stopPropagation();
+            collectionPanel.classList.remove('visible');
+        });
+
+        function renderCollection() {
+            endingListEl.innerHTML = '';
+            ALL_ENDINGS.forEach(function(ending) {
+                var div = document.createElement('div');
+                var unlocked = state.endingHistory.indexOf(ending.name) !== -1;
+                div.className = 'ending-item' + (unlocked ? ' unlocked ' + ending.type : '');
+                div.textContent = unlocked ? ending.name : '？？？';
+                endingListEl.appendChild(div);
+            });
+        }
+
+        // ============================================================
+        //  光标
+        // ============================================================
+        function updateCursorImage(type) {
+            if (type === 'open') customCursor.src = 'item_hand_open.png';
+            else if (type === 'fist') customCursor.src = 'item_hand_fist.png';
+        }
+
+        state.lastMouseX = window.innerWidth / 2;
+        state.lastMouseY = window.innerHeight / 2;
+
+        document.addEventListener('mousemove', function(e) {
+            state.lastMouseX = e.clientX;
+            state.lastMouseY = e.clientY;
+            if (state.cursorLock) return;
+            customCursor.style.left = e.clientX + 'px';
+            customCursor.style.top = e.clientY + 'px';
+            if (dragGhost.style.display === 'block') {
+                dragGhost.style.left = e.clientX + 'px';
+                dragGhost.style.top = e.clientY + 'px';
+            }
+        });
+
+        document.addEventListener('mousedown', function(e) {
+            if (e.button === 0) updateCursorImage('fist');
+        });
+        document.addEventListener('mouseup', function(e) {
+            updateCursorImage('open');
+            if (dragGhost.style.display === 'block') dragGhost.style.display = 'none';
+        });
+
+        // ============================================================
+        //  道具拖拽（PC）
+        // ============================================================
+        var isDraggingItem = false;
+        var dragItemType = null;
+        var dragStartTime = 0;
+        var dragStartPos = { x: 0, y: 0 };
+        var itemSlots = document.querySelectorAll('.item-slot');
+
+        itemSlots.forEach(function(slot) {
+            slot.addEventListener('mousedown', function(e) {
+                if (state.isEnding || state.isStayed) return;
+                if (e.button !== 0) return;
+                e.preventDefault();
+                isDraggingItem = true;
+                dragItemType = slot.getAttribute('data-item');
+                dragStartTime = Date.now();
+                dragStartPos = { x: e.clientX, y: e.clientY };
+                dragGhost.src = slot.querySelector('img').src;
+                dragGhost.style.display = 'block';
+                dragGhost.style.left = e.clientX + 'px';
+                dragGhost.style.top = e.clientY + 'px';
+                updateCursorImage('fist');
+            });
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (isDraggingItem && dragGhost.style.display === 'block') {
+                dragGhost.style.left = e.clientX + 'px';
+                dragGhost.style.top = e.clientY + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            if (isDraggingItem) {
+                var releasedOnCharacter = isPointInCharacterZone(e.clientX, e.clientY);
+                if (releasedOnCharacter && dragItemType) {
+                    applyItemEffect(dragItemType);
+                }
+                isDraggingItem = false;
+                dragItemType = null;
+                dragGhost.style.display = 'none';
+                updateCursorImage('open');
+            }
+        });
+
+        // ============================================================
+        //  手部交互（PC）
+        // ============================================================
+        var handOnCharMouseDown = false;
+        var handMouseDownTime = 0;
+        var handMouseDownPos = { x: 0, y: 0 };
+        var handChokeTriggered = false;
+
+        characterZone.addEventListener('mousedown', function(e) {
+            if (state.isEnding || state.isStayed) return;
+            if (isDraggingItem) return;
+            if (e.button !== 0) return;
+            e.preventDefault();
+            handOnCharMouseDown = true;
+            handMouseDownTime = Date.now();
+            handMouseDownPos = { x: e.clientX, y: e.clientY };
+            handChokeTriggered = false;
+            updateCursorImage('fist');
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (handOnCharMouseDown && !handChokeTriggered) {
+                var elapsed = Date.now() - handMouseDownTime;
+                var dx = e.clientX - handMouseDownPos.x;
+                var dy = e.clientY - handMouseDownPos.y;
+                var dist = Math.sqrt(dx*dx + dy*dy);
+                if (elapsed >= 200 || dist > 8) {
+                    handChokeTriggered = true;
+                    showDecorLayer('suffocation');
+                    updateCursorImage('fist');
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            if (handOnCharMouseDown) {
+                var elapsed = Date.now() - handMouseDownTime;
+                var dx = e.clientX - handMouseDownPos.x;
+                var dy = e.clientY - handMouseDownPos.y;
+                var dist = Math.sqrt(dx*dx + dy*dy);
+                var isOnChar = isPointInCharacterZone(e.clientX, e.clientY);
+
+                if (handChokeTriggered) {
+                    if (isOnChar || dist > 5) applyHandInteraction('choke');
+                    hideDecorLayer('suffocation');
+                } else if (elapsed < 200 && dist < 5 && isOnChar) {
+                    applyHandInteraction('touch');
+                }
+                handOnCharMouseDown = false;
+                handChokeTriggered = false;
+                hideDecorLayer('suffocation');
+                updateCursorImage('open');
+            }
+        });
+
+        // ============================================================
+        //  辅助
+        // ============================================================
+        function isPointInCharacterZone(px, py) {
+            var rect = characterZone.getBoundingClientRect();
+            return px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom;
+        }
+        function isTouchInElement(touch, el) {
+            var rect = el.getBoundingClientRect();
+            return touch.clientX >= rect.left && touch.clientX <= rect.right &&
+                   touch.clientY >= rect.top && touch.clientY <= rect.bottom;
+        }
+
+        // ============================================================
+        //  触摸事件
+        // ============================================================
+        var touchOnItem = null;
+        var touchItemTimer = null;
+        var touchOnChar = false;
+        var touchCharTimer = null;
+        var touchCharStartTime = 0;
+        var touchCharStartPos = { x: 0, y: 0 };
+        var touchDragActive = false;
+        var touchDragItemType = null;
+
+        itemSlots.forEach(function(slot) {
+            slot.addEventListener('touchstart', function(e) {
+                if (state.isEnding || state.isStayed) return;
+                var touch = e.touches[0];
+                touchOnItem = slot;
+                touchDragActive = false;
+                touchDragItemType = slot.getAttribute('data-item');
+                dragGhost.src = slot.querySelector('img').src;
+                dragGhost.style.display = 'none';
+                updateCursorImage('fist');
+                touchItemTimer = setTimeout(function() {
+                    touchDragActive = true;
+                    dragGhost.style.display = 'block';
+                    dragGhost.style.left = touch.clientX + 'px';
+                    dragGhost.style.top = touch.clientY + 'px';
+                    updateCursorImage('fist');
+                }, 500);
+            }, { passive: false });
+
+            slot.addEventListener('touchend', function(e) {
+                if (touchItemTimer) clearTimeout(touchItemTimer);
+                if (touchDragActive && dragGhost.style.display === 'block') {
+                    var touch = e.changedTouches[0];
+                    if (isPointInCharacterZone(touch.clientX, touch.clientY) && touchDragItemType) {
+                        applyItemEffect(touchDragItemType);
+                    }
+                }
+                touchOnItem = null;
+                touchDragActive = false;
+                touchDragItemType = null;
+                dragGhost.style.display = 'none';
+                updateCursorImage('open');
+            });
+
+            slot.addEventListener('touchmove', function(e) {
+                if (touchDragActive) {
+                    var touch = e.touches[0];
+                    dragGhost.style.left = touch.clientX + 'px';
+                    dragGhost.style.top = touch.clientY + 'px';
+                    dragGhost.style.display = 'block';
+                }
+            }, { passive: false });
+        });
+
+        characterZone.addEventListener('touchstart', function(e) {
+            if (state.isEnding || state.isStayed) return;
+            if (touchDragActive) return;
+            var touch = e.touches[0];
+            touchOnChar = true;
+            touchCharStartTime = Date.now();
+            touchCharStartPos = { x: touch.clientX, y: touch.clientY };
+            updateCursorImage('fist');
+            touchCharTimer = setTimeout(function() {
+                if (touchOnChar) {
+                    showDecorLayer('suffocation');
+                    updateCursorImage('fist');
+                }
+            }, 500);
+        }, { passive: false });
+
+        characterZone.addEventListener('touchend', function(e) {
+            if (touchCharTimer) clearTimeout(touchCharTimer);
+            var elapsed = Date.now() - touchCharStartTime;
+            var touch = e.changedTouches[0];
+            var dx = touch.clientX - touchCharStartPos.x;
+            var dy = touch.clientY - touchCharStartPos.y;
+            var dist = Math.sqrt(dx*dx + dy*dy);
+
+            if (elapsed >= 500 || dist > 10) {
+                if (touchOnChar) applyHandInteraction('choke');
+            } else if (elapsed < 500 && dist < 10 && touchOnChar) {
+                applyHandInteraction('touch');
+            }
+            touchOnChar = false;
+            hideDecorLayer('suffocation');
+            updateCursorImage('open');
+        });
+
+        characterZone.addEventListener('touchmove', function(e) {
+            if (touchOnChar && Date.now() - touchCharStartTime >= 400) {
+                showDecorLayer('suffocation');
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', function(e) {
+            if (touchDragActive && dragGhost.style.display === 'block') {
+                var touch = e.touches[0];
+                dragGhost.style.left = touch.clientX + 'px';
+                dragGhost.style.top = touch.clientY + 'px';
+            }
+            if (e.touches[0]) {
+                customCursor.style.left = e.touches[0].clientX + 'px';
+                customCursor.style.top = e.touches[0].clientY + 'px';
+            }
+        }, { passive: false });
+
+        // ============================================================
+        //  全局点击：对话推进
+        // ============================================================
+        document.addEventListener('click', function(e) {
+            // 不干扰按钮
+            if (e.target.closest('button')) return;
+            if (e.target.closest('.item-slot')) return;
+            if (e.target.closest('#collection-panel')) return;
+            if (e.target.closest('#choice-area')) return;
+            if (e.target.closest('#fade-to-black')) return;
+
+            // 真结局对话推进
+            if (state.trueEndingMode && state.trueEndingWaiting) {
+                if (Date.now() - state.lastInteractionTime < 600) return;
+                advanceTrueEnding();
+                return;
+            }
+
+            // 普通对话推进
+            if (state.isDialogShowing && state.currentDialog && !state.currentDialog.auto) {
+                // 防止刚交互完的 click 事件立刻推进
+                if (Date.now() - state.lastInteractionTime < 600) return;
+                advanceDialog();
+                return;
+            }
+        }, false);
+
+        // ============================================================
+        //  防误操作
+        // ============================================================
+        document.addEventListener('click', function(e) {
+            if (state.isStayed && !endingOverlay.contains(e.target) && !collectionPanel.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+
+        document.addEventListener('DOMContentLoaded', function() {
+    // 初始化光标位置
+    customCursor.style.left = '50%';
+    customCursor.style.top = '40%';
+
+    // 显示开始弹窗，暂不启动游戏
+    var startModal = document.getElementById('start-modal');
+    var startBtn = document.getElementById('modal-start-btn');
+    
+    // 若弹窗不存在则直接启动（安全兜底）
+    if (!startModal || !startBtn) {
+        init();
+        console.log('主人，您怎么会在这里？');
+        console.log('第' + state.totalRounds + '轮开始');
+        return;
+    }
+
+    // 点击开始按钮
+    startBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        startModal.style.display = 'none';  // 隐藏弹窗
+        init();                            // 初始化游戏
+        console.log('主人，您怎么会在这里？');
+        console.log('第' + state.totalRounds + '轮开始');
+    });
+});
+
+      
+    })();
+    
+    </script>
+</body>
+</html>
